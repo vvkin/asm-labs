@@ -1,0 +1,8 @@
+# those files can be generated from .asm
+*.lst
+*.o
+*.map
+*.bin
+*.tmp
+*.out
+*.obf
