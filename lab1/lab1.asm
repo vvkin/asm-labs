@@ -5,7 +5,7 @@ _start:
 		; nullify al
 		xor al, al
 		
-		; nullify array ([] to put 0 to current address)
+		; nullify array 
 		mov [dest], al
 		mov [dest+1], al
 		mov [dest+2], al
@@ -25,8 +25,11 @@ _start:
 
 		; sys_exit
 		mov eax, 1
+		mov ebx, 0
 		int 80h
+
 
 section .data 
 		source db 10, 20, 30, 40 
 		dest times 4 db "?"
+
