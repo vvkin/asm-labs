@@ -1,22 +1,33 @@
 global _start                           ; start point for linker
 
 section .bss
-		buffer resb 7     
+		buffer resb 7
+		dummy  resb 1
 
 section .text
 _start:
-		mov ecx, 7
 
 _clear_buffer:
+		mov ecx, 7                  ; buffer length
+.loop:
 		mov byte [buffer+ecx], 0    ; fill with \0
-		loop _clear_buffer
+		loop .loop
 
+_read_input:
 		mov ebx, 2                  ; stdin
-		mov eax, 3                  ; sys_read
 		mov edx, 7                  ; maximal length of input
 		mov ecx, buffer             ; place str to input variable
+
+_flush_stdin:
+		mov eax, 3                  ; sys_read
 		int 80h                     ; call kernel
+		cmp byte [ecx+eax-1], 10    ; compare last char in stdin with \n
+		je _main
+		mov edx, 1
+		mov ecx, dummy
+		jmp _flush_stdin
 		
+_main:
 		push buffer 
 		call _atoi                  ; result in ax
 		add esp, 4
