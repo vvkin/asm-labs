@@ -1,4 +1,4 @@
-global _start                   ; start point for linker
+global _start                           ; start point for linker
 
 section .bss
 		buffer resb 7     
@@ -26,7 +26,7 @@ _clear_buffer:
 
 		push ax
 		call _print_num
-		add esp, 4
+		add esp, 2
 
 _exit:	
 		mov ebx, 0
@@ -61,9 +61,9 @@ _atoi:
 .valid_digit:
 		sub bl, 48                  ; get digit
 		imul ax, word 10
-		jo _start
+		jo .error
 		add ax, bx
-		jo _start
+		jo .error
 		jmp .new_iteration
 
 .check_sign:
@@ -76,14 +76,15 @@ _atoi:
 		jmp .loop
 
 .error:
-		leave                     
+		leave
+		add esp, 8
 		jmp _start                  ; prompt for a new number
 
 .done:
 		cmp dl, 0                   ; check for sign
 		je .exit
 		neg ax
-		jo _start
+		jo .error 
 
 .exit:
 		leave
