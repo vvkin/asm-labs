@@ -1,22 +1,21 @@
-global _start										; start point for linker
+global _start                   ; start point for linker
 
 section .bss
-		buffer  resb   6						; input str (6 bit)
+		buffer  resb 7              ; input str (6 bit)
 
 section .text
 _start:
-		mov ebx, 2									; stdin
-		mov eax, 3									; sys_read
-		mov edx, 7									; maximal length of input
-		mov ecx, buffer							; place str to input variable
-		int 80h											; call kernel
+		mov ebx, 2                  ; stdin
+		mov eax, 3                  ; sys_read
+		mov edx, 7                  ; maximal length of input
+		mov ecx, buffer             ; place str to input variable
+		int 80h                     ; call kernel
 		
 		push buffer 
-		call _atoi									; result in ax
-		;pop [input]
+		call _atoi                  ; result in ax
 
-		sub ax, 88							    ; operation (var. 10)
-		jo _start										; met overflow
+		sub ax, 88                  ; operation (var. 10)
+		jo _start                   ; met overflow
 		
 		push ax
 		call _print_num
@@ -35,24 +34,24 @@ _atoi:
 		xor eax, eax
 		xor ebx, ebx
 		xor edx, edx
-		mov ecx, [ebp+8]						; pointer to first char in input
+		mov ecx, [ebp+8]            ; pointer to first char in input
 		
 .loop:
-		mov bl, byte [ecx]					; current char
-		cmp bl, 0										; \0 
+		mov bl, byte [ecx]          ; current char
+		cmp bl, 0                   ; \0 
 		je .done
-		cmp bl, 10									; \n
+		cmp bl, 10                  ; \n
 		je .done
 
-		cmp bl, 45									; check for minus
+		cmp bl, 45                  ; check for minus
 		je .check_sign
-		cmp bl, 48									; less than '0'
+		cmp bl, 48                  ; less than '0'
 		jl .error
-		cmp bl, 57									; greater than '9'
+		cmp bl, 57                  ;  greater than '9'
 		jg .error
 
 .valid_digit:
-		sub bl, 48									; get digit
+		sub bl, 48                  ; get digit
 		imul ax, word 10
 		jo _start
 		add ax, bx
@@ -60,7 +59,7 @@ _atoi:
 		jmp .new_iteration
 
 .check_sign:
-		cmp ecx, [ebp+8]						; check is it first char
+		cmp ecx, [ebp+8]            ; check is it first char
 		jne .error 
 		mov dl, 1
 
@@ -69,11 +68,11 @@ _atoi:
 		jmp .loop
 
 .error:
-		leave                        ; error symbol
-		jmp _start									 ; prompt for new number
+		leave                     
+		jmp _start                  ; prompt for a new number
 
 .done:
-		cmp dl, 0										 ; check for sign
+		cmp dl, 0                   ; check for sign
 		je .exit
 		neg ax
 		jo _start
@@ -86,19 +85,19 @@ _atoi:
 ;-- print 16bit integer to stdin
 _print_num:
 		enter 0, 0
-		cmp word [ebp+8], 0          ; check sign 
+		cmp word [ebp+8], 0         ; check sign 
 		jge .init
 		
-		push ecx                     ; save ecx
+		push ecx                    ; save ecx
 		mov byte [buffer], 45
 		mov ebx, 1
 		mov eax, 4
-		mov ecx, buffer              ; print '-' to stdout
+		mov ecx, buffer             ; print '-' to stdout
 		mov edx, 1 
 		int 80h
 		pop ecx
 
-		neg word [ebp+8]             ; make input positive
+		neg word [ebp+8]            ; make input positive
 
 .init:
 		mov ax, [ebp+8]
@@ -111,18 +110,18 @@ _print_num:
 		push dx
 		test ax, ax
 		jnz .loop
-		mov edi, ecx                 ; result will be in ecx 
+		mov edi, ecx                ; result will be in ecx 
 
 .stack:
 		pop ax	
 		stosb                        
-		cmp esp, ebp								 ; check stack is empty
+		cmp esp, ebp                ; check stack is empty
 		jne .stack
 
 .print:
 		mov ebx, 1
 		mov eax, 4
-		mov edx, edi                 ; result length
+		mov edx, edi                ; result length
 		int 80h
 		leave
 		ret
