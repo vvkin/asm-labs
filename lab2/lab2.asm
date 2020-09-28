@@ -1,10 +1,16 @@
 global _start                   ; start point for linker
 
 section .bss
-		buffer  resb 7              ; input str (6 bit)
+		buffer resb 7     
 
 section .text
 _start:
+		mov ecx, 7
+
+_clear_buffer:
+		mov byte [buffer+ecx], 0    ; fill with \0
+		loop _clear_buffer
+
 		mov ebx, 2                  ; stdin
 		mov eax, 3                  ; sys_read
 		mov edx, 7                  ; maximal length of input
@@ -13,12 +19,14 @@ _start:
 		
 		push buffer 
 		call _atoi                  ; result in ax
+		add esp, 4
 
 		sub ax, 88                  ; operation (var. 10)
 		jo _start                   ; met overflow
-		
+
 		push ax
 		call _print_num
+		add esp, 4
 
 _exit:	
 		mov ebx, 0
