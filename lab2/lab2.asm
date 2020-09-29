@@ -1,11 +1,20 @@
 global _start                           ; start point for linker
 
+section .data
+		msg db "Enter number: ",  10
+		len equ $ - msg
 section .bss
 		buffer resb 7
 		dummy  resb 1
 
 section .text
 _start:
+
+		mov ebx, 1
+		mov eax, 4
+		mov edx, len
+		mov ecx, msg
+		int 80h
 
 _clear_buffer:
 		mov ecx, 7                  ; buffer length
@@ -32,7 +41,7 @@ _main:
 		call _atoi                  ; result in ax
 		add esp, 4
 
-		sub ax, 88                  ; operation (var. 10)
+		sub ax, 88                  ; operation (var. 11)
 		jo _start                   ; met overflow
 
 		push ax
