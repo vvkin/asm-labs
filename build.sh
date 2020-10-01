@@ -3,5 +3,5 @@
 
 dir_name="$PWD/$1"
 
-nasm -g -f elf "$dir_name/$1.asm"
+nasm -g -f elf -l "$dir_name/$1.lst" "$dir_name/$1.asm"
 ld -m elf_i386 -o "$dir_name/$1" "$dir_name/$1.o"
