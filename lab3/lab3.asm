@@ -35,17 +35,8 @@ _start:
     add esp, 4
 
     call _calc
-
-    mov edi, buffer
-    call _dtoa
-		
-    mov ebx, 1
-    mov eax, 4
-    mov ecx, buffer
-    mov edx, edi
-    sub edx, buffer
-    int 80h
-
+    call _printf
+    
 _exit:
     mov ebx, 0
     mov eax, 1                  ; sys_exit
@@ -80,9 +71,7 @@ _atof:
 		%define I_BUFFER dword [ebp-8]
 		%define F_BUFFER qword [ebp-16]
 
-    push ebp
-		mov ebp, esp
-		sub esp, 16
+    enter 16, 0
 
     fldz                        ; push 0 to st0
     xor eax, eax                ; number of digits after dot
@@ -200,26 +189,24 @@ _calc:
 
 ;--- _normalize
 ;--- normalize value in st0
-;--- fvar - input
-;--- fexp - exp
-;--- fsig - signficant
+;--- return: st1=significant, st0=exp
 _normalize:
     %define SIGN   word [ebp-2]
     %define OLD_CW word [ebp-4]
-		%define NEW_CW word [ebp-6]
+    %define NEW_CW word [ebp-6]
+    %define F_EXP  qword [ebp-14]
+    %define F_BUFFER qword [ebp-22]
 
-		push ebp
-		mov esp, ebp
-		sub esp, 6
-    
-		; fexp = floor(log_10(fvar))
-		fld st0
-		fabs                        ; log doesn't support neg. values
-		fxch st1
-		fdiv st1, st0
-		fistp SIGN
+    enter 22, 0
 
-		fld st0
+    ; fexp = floor(log_10(fvar))
+    fld st0
+    fabs                        ; log doesn't support neg. values
+    fxch st1
+    fdiv st0, st1
+    fistp SIGN
+
+    fld st0
     fldlg2                      ; st0 = log_10(2)
     fxch st1                    ; st2=fvar, st1=log_10(2), st0=fvar
     fyl2x                       ; st0 = log_10(2) * log_2(fvar)
@@ -230,34 +217,35 @@ _normalize:
     fldcw NEW_CW                ; change rounding mode
     frndint                     ; truncate log_10(input)
     fldcw OLD_CW                ; restore rounding mode
-    fst qword [fexp]            ; store exp value
+    fst F_EXP                   ; store exp value
 
     ; fsig = fvar / 10^(fexp)
     fxch st1                    ; st0=fvar, st1=fexp
-    fstp qword [fbuffer]        ; fbuffer=fvar, st0=fexp
+    fstp F_BUFFER               ; fbuffer=fvar, st0=fexp
     call _pow10                 ; st0=10^fexp
-    fld qword [fbuffer]         ; st0=fvar, st1=10^fexp
+    fld F_BUFFER                ; st0=fvar, st1=10^fexp
     fdivrp                      ; st0=fvar/10^fexp
     
-		cmp SIGN, 0
+    cmp SIGN, 1
     je .exit
     fchs
 
 .exit:
-    fstp qword [fsig]
-    ret
+    fld F_EXP
+    leave
+    ret                         ; return:  st1=fsig, st2=fexp
 
 ;--- _dtoa(double) -> const char*
 ;--- input: fstack (st0), edi - pointer to write
 ;--- convert double to ASCII
 _dtoa:
-%define CONTROL_WORD    word [ebp-2]
-%define TEN             word [ebp-4]
-%define TEMP            word [ebp-4]
+    %define CONTROL_WORD    word [ebp-2]
+    %define TEN             word [ebp-4]
+    %define TEMP            word [ebp-6]
     
     push ebp
     mov ebp, esp
-    sub esp, 4 
+    sub esp, 6
 		
     fstcw CONTROL_WORD
     mov ax, CONTROL_WORD
@@ -351,3 +339,44 @@ fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: targe
     mov byte [edi], 0           ; null-termination for ASCIIZ
     leave
     ret                         ; return: EDI points to the null-termination of the string
+
+; --- printf(double) -> void
+; --- print st0 to stdin
+_printf:
+    %define I_BUFFER word  [ebp-2]
+    %define F_BUFFER qword [ebp-10]
+
+    enter 10, 0
+
+    fst F_BUFFER
+    call _normalize              ; st1=significant, st0=fexp
+   
+    fistp I_BUFFER
+    cmp I_BUFFER, 18
+    jg .exp_form
+    cmp I_BUFFER, -18
+    jl .exp_form
+
+.common_form:
+    ffree st0
+    fld F_BUFFER
+    call _print_st0
+    leave 
+    ret
+
+.exp_form:
+    call _print_st0
+    leave 
+    ret
+
+_print_st0:
+   mov edi, buffer
+   call _dtoa
+   
+   mov ebx, 1
+   mov eax, 4
+   mov ecx, buffer
+   mov edx, edi
+   int 80h
+   ret
+
