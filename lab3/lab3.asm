@@ -58,9 +58,7 @@ _error:
     jmp _exit
 
 ;--- _pow10
-;--- calculate 10 ^ n
-;--- n - st0
-;--- output: st0
+;--- calc 10^st0 and put in st0
 _pow10:
     ; x^y=2^(y * log_2(x))
     fldl2t                      ; st0 = log_2(10)
@@ -73,7 +71,7 @@ _pow10:
     fld1                        ; push 1            
     faddp                       ; st0 += st1 
     fscale                      ; st0 *= 2 ^ st1 
-    fstp st1                    ; st0 = x^y
+    fstp st1                    ; st0=10^n
     ret
 
 ;--- atof(const char*) -> float
@@ -84,9 +82,8 @@ _atof:
     %define SIGN  byte [ebp-2]
     %define TEN   word [ebp-4] 
     %define I_BUFFER dword [ebp-8]
-    %define F_BUFFER tword [ebp-18]
 
-    enter 18, 0
+    enter 8, 0
 
     fldz                        ; push 0 to st0
     xor eax, eax                ; number of digits after dot
@@ -147,13 +144,11 @@ _atof:
     fchs                        ; negate st0
 
 .divide:
-    fstp F_BUFFER               ; save st0
     mov I_BUFFER, eax
-    fild dword I_BUFFER         ; push eax to fstack
+    fild I_BUFFER               ; push eax to fstack
 
-    call _pow10                 ; st0 = 10 ^ eax
-    fld F_BUFFER
-    fdivrp
+    call _pow10                 ; st0=10^eax, st1=fvar*st0
+    fdivp
 
 .exit:
     leave
@@ -213,13 +208,12 @@ _calc:
 ;--- normalize value in st0
 ;--- return: st1=significant, st0=exp
 _normalize:
-    %define SIGN   word [ebp-2]
-    %define OLD_CW word [ebp-4]
-    %define NEW_CW word [ebp-6]
+    %define SIGN   word  [ebp-2]
+    %define OLD_CW word  [ebp-4]
+    %define NEW_CW word  [ebp-6]
     %define F_EXP  qword [ebp-14]
-    %define F_BUFFER tword [ebp-24]
 
-    enter 24, 0
+    enter 14, 0
     
     fild SIGN
     fcomip st1                  ; compare with zero
@@ -243,21 +237,18 @@ _normalize:
     fldcw NEW_CW                ; change rounding mode
     frndint                     ; truncate log_10(input)
     fldcw OLD_CW                ; restore rounding mode
-    fst F_EXP                   ; store exp value
+		fst F_EXP                   ; store fexp value, st0=fexp, st1=fvar
 
     ; fsig = fvar / 10^(fexp)
-    fxch st1                    ; st0=fvar, st1=fexp
-    fstp F_BUFFER               ; fbuffer=fvar, st0=fexp
-    call _pow10                 ; st0=10^fexp
-    fld F_BUFFER                ; st0=fvar, st1=10^fexp
-    fdivrp                      ; st0=fvar/10^fexp
+    call _pow10                 ; st0=10^fexp, st1=fvar
+    fdivp                       ; st0=fvar/10^fexp
     
     cmp SIGN, 1
     je .exit
     fchs
 
 .exit:
-    fld F_EXP
+    fld F_EXP                   ; st0=fexp, st1=significant
     leave
     ret                         ; return:  st1=fsig, st2=fexp
 
@@ -265,9 +256,9 @@ _normalize:
 ;--- input: fstack (st0), edi - pointer to write
 ;--- convert double to ASCII
 _dtoa:
-    %define CONTROL_WORD    word [ebp-2]
-    %define TEN             word [ebp-4]
-    %define TEMP            word [ebp-6]
+    %define CONTROL_WORD word [ebp-2]
+    %define TEN          word [ebp-4]
+    %define TEMP         word [ebp-6]
     
     enter 6, 0
 		
