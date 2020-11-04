@@ -6,14 +6,12 @@ section .data
     msgX db 'Enter x:', 10
     lenX equ $ - msgX
     msgRes db 'The value of the f(x):', 10
-		lenRes equ $ - msgRes
-		msgErr db 'Sorry, but something went wrong', 10
-		lenErr equ $ - msgErr
+    lenRes equ $ - msgRes
+    msgErr db 'Sorry, but something went wrong', 10
+    lenErr equ $ - msgErr
 
 section .bss
-    buffer  resb BUFF_SIZE      ; buffer to read inpuy
-    fbuffer rest 1              ; buffer to store double values
-    ibuffer resd 1              ; buffer to store dword
+    buffer resb BUFF_SIZE      ; buffer to read input
 
 section .text
 _start:
@@ -38,10 +36,10 @@ _start:
     call _calc
     
     mov ebx, 1
-		mov eax, 4
-		mov ecx, msgRes
-		mov edx, lenRes
-		int 80h
+    mov eax, 4
+    mov ecx, msgRes
+    mov edx, lenRes
+    int 80h
 
     mov edi, buffer
     call _printf
@@ -53,11 +51,11 @@ _exit:
 
 _error:
     mov ebx, 1
-		mov eax, 4
-		mov ecx, msgErr
-		mov edx, lenErr
-		int 80h
-		jmp _exit
+    mov eax, 4
+    mov ecx, msgErr
+    mov edx, lenErr
+    int 80h
+    jmp _exit
 
 ;--- _pow10
 ;--- calculate 10 ^ n
@@ -164,45 +162,52 @@ _atof:
 ;--- _calc
 ;--- calculate func value (x = st0)
 _calc:
-    mov word [ibuffer], 1
-    fild word [ibuffer]
+    %define I_BUFFER word [ebp-2]
+
+    enter 2, 0
+
+    mov I_BUFFER, 1
+    fild I_BUFFER
     fcomip st1
     jae .2                      ; 1 >= x
 
-    mov word [ibuffer], 20
-    fild word [ibuffer]
+    mov I_BUFFER, 20
+    fild I_BUFFER
     fcomip st1
     jb .3                       ; 20 < x
 
 .1: ; 54+x^2/(1+x)              1 < x <= 20
     fld st0                     ; st0 = st1 = x
     fmul st0                    ; st0=x^2
-    mov word [ibuffer], 54
-    fiadd word [ibuffer]        ; st0=54+x^2
+    mov I_BUFFER, 54
+    fiadd I_BUFFER              ; st0=54+x^2
     fld1                        ; st0=1, st1=54+x^2, st2=x
     faddp st2                   ; st0=1+x
     fdivrp                      ; done
-    ret
+    leave
+		ret
 
 .2: ; 75 * x^2 - 17 * x         x <= 1
     fld st0                     ; st0=st1=x
     fmul st0                    ; st0=x^2
-    mov word [ibuffer], 75
-    fimul word [ibuffer],       ; st0=75*x^2
-    mov word [ibuffer], 17
+    mov I_BUFFER, 75
+    fimul I_BUFFER              ; st0=75*x^2
+    mov I_BUFFER, 17
     fxch st1                    ; st0=x, st1=75*x^2
-    fimul word [ibuffer]        ; st1=17*x
+    fimul I_BUFFER              ; st1=17*x
     fsub                        ; st0=st1-st0
-    ret                         ; done
+    leave
+		ret                         ; done
 
 .3: ; 85 * x / (1 + x)          x > 20
     fld st0                     ; st0 = st1 = x
-    mov word [ibuffer], 85         
-    fimul word [ibuffer]        ; st0 = 85x
+    mov I_BUFFER, 85         
+    fimul I_BUFFER              ; st0 = 85x
     fld1                        ; st0=1, st1=85x, st2=x
     faddp st2                   ; st0=85x, st1=1+x
     fdivrp                      ; st0=st0/st1
-    ret 
+    leave
+		ret 
 
 ;--- _normalize
 ;--- normalize value in st0
@@ -264,7 +269,7 @@ _dtoa:
 		
     fstcw CONTROL_WORD
     mov ax, CONTROL_WORD
-    or ah, 00001100b           ; set RC=11: truncating rounding mode
+    or ah, 00001100b            ; set RC=11: truncating rounding mode
     mov TEMP, ax
     fldcw TEMP                  ; load new rounding mode
 
@@ -297,7 +302,7 @@ _dtoa:
     fstsw ax
     sahf
     
-		jz .exit                    ; no: once more
+    jz .exit                    ; no: once more
     loop .get_fractional
 
 .exit:
@@ -363,12 +368,12 @@ fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: targe
 _itoa:
     enter 0, 0
 
-		cmp word [ebp+8], 0         ; check sign 
+    cmp word [ebp+8], 0         ; check sign 
     jge .init
 	  
     mov byte [edi], '-'
-		add edi, 1
-		neg word [ebp+8]            ; make input positive
+    add edi, 1
+    neg word [ebp+8]            ; make input positive
 
 .init:
     mov ax, [ebp+8]
@@ -392,8 +397,8 @@ _itoa:
     leave
     ret
 
-; --- printf(double) -> void
-; --- print st0 to stdin
+;--- printf(double) -> void
+;--- print st0 to stdin
 _printf:
     %define I_BUFFER word  [ebp-2]
     %define F_BUFFER qword [ebp-10]
@@ -413,26 +418,26 @@ _printf:
     ffree st0
     fld F_BUFFER
     call _dtoa
-    mov byte [edi], 10
-		add edi, 1
-		call _print_edi
+    mov byte [edi], 10            ; \n
+    add edi, 1
+    call _print_edi
     leave 
     ret
 
 .exp_form:
-		call _dtoa
+    call _dtoa
     mov byte [edi], 101           ; e
     add edi, 1
     call _print_edi
 		
-		mov edi, buffer
-		push I_BUFFER
+    mov edi, buffer
+    push I_BUFFER
     call _itoa
-    mov byte [edi], 10
-		add edi, 1
-		call _print_edi
-		leave
-		ret
+    mov byte [edi], 10             ; \n
+    add edi, 1
+    call _print_edi
+    leave
+    ret
 
 _print_edi:
     mov ebx, 1
@@ -440,6 +445,6 @@ _print_edi:
     mov ecx, buffer
     mov edx, edi
     sub edx, buffer
-		int 80h
+    int 80h
     ret
 
