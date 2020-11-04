@@ -5,9 +5,10 @@ global _start
 section .data
     msgX db 'Enter x:', 10
     lenX equ $ - msgX
-
-    fsig dq 0.0                 ; handle significant
-    fexp dq 0.0                 ; exponent
+    msgRes db 'The value of the f(x):', 10
+		lenRes equ $ - msgRes
+		msgErr db 'Sorry, but something went wrong', 10
+		lenErr equ $ - msgErr
 
 section .bss
     buffer  resb BUFF_SIZE      ; buffer to read inpuy
@@ -24,23 +25,39 @@ _start:
     mov ecx, msgX
     int 80h
 		
-		mov ebx, 2
-		mov eax, 3
-		mov edx, BUFF_SIZE
+    mov ebx, 2
+    mov eax, 3
+    mov edx, BUFF_SIZE
     mov ecx, buffer
-		int 80h
+    int 80h
 
     push buffer
     call _atof
     add esp, 4
 
     call _calc
+    
+    mov ebx, 1
+		mov eax, 4
+		mov ecx, msgRes
+		mov edx, lenRes
+		int 80h
+
+    mov edi, buffer
     call _printf
     
 _exit:
     mov ebx, 0
     mov eax, 1                  ; sys_exit
     int 80h
+
+_error:
+    mov ebx, 1
+		mov eax, 4
+		mov ecx, msgErr
+		mov edx, lenErr
+		int 80h
+		jmp _exit
 
 ;--- _pow10
 ;--- calculate 10 ^ n
@@ -67,9 +84,9 @@ _pow10:
 _atof:
     %define DIGIT byte [ebp-1]
     %define SIGN  byte [ebp-2]
-		%define TEN   word [ebp-4] 
-		%define I_BUFFER dword [ebp-8]
-		%define F_BUFFER qword [ebp-16]
+    %define TEN   word [ebp-4] 
+    %define I_BUFFER dword [ebp-8]
+    %define F_BUFFER qword [ebp-16]
 
     enter 16, 0
 
@@ -79,8 +96,8 @@ _atof:
     xor edx, edx                ; sign
     mov ecx, [ebp+8]            ; pointer to first char in input
 	  
-		mov TEN, 10
-		mov SIGN, 0
+    mov TEN, 10
+    mov SIGN, 0
 
 .loop:
     mov bl, byte [ecx]          ; current char
@@ -95,7 +112,7 @@ _atof:
     je .check_sign
     cmp bl, 48                  ; less than '0'
     jl .error
-    cmp bl, 57                  ;  greater than '9'
+    cmp bl, 57                  ; greater than '9'
     jg .error
 
 .valid_digit:
@@ -124,7 +141,7 @@ _atof:
 .error:
     leave
     add esp, 8
-    jmp _start                  ; prompt for a new number
+    jmp _error                  ; prompt for a new number
 
 .done:
     cmp SIGN, 0                 ; check for sign
@@ -211,9 +228,9 @@ _normalize:
     fxch st1                    ; st2=fvar, st1=log_10(2), st0=fvar
     fyl2x                       ; st0 = log_10(2) * log_2(fvar)
     fstcw OLD_CW                ; save previous rounding mode
-    mov dx, OLD_CW
-    or  dx, 0x0c000             ; rounding mode = 3, toward zero
-    mov NEW_CW, dx              ; new rounding mode
+    mov ax, OLD_CW
+    or ah, 00000100b            ; rounding mode=3, toward zero
+    mov NEW_CW, ax              ; new rounding mode
     fldcw NEW_CW                ; change rounding mode
     frndint                     ; truncate log_10(input)
     fldcw OLD_CW                ; restore rounding mode
@@ -243,13 +260,11 @@ _dtoa:
     %define TEN             word [ebp-4]
     %define TEMP            word [ebp-6]
     
-    push ebp
-    mov ebp, esp
-    sub esp, 6
+    enter 6, 0
 		
     fstcw CONTROL_WORD
     mov ax, CONTROL_WORD
-    or ah, 0b00001100           ; set RC=11: truncating rounding mode
+    or ah, 00001100b           ; set RC=11: truncating rounding mode
     mov TEMP, ax
     fldcw TEMP                  ; load new rounding mode
 
@@ -262,6 +277,7 @@ _dtoa:
 
     mov byte [edi], '.'         ; decimal point
     add edi, 1
+    mov ecx, 18                 ; less than 18 digits after the dot
 
     ; push 10 to st1	
     mov TEN, 10
@@ -280,7 +296,11 @@ _dtoa:
     fxam                        ; st0 == 0.0?
     fstsw ax
     sahf
-    jnz .get_fractional         ; no: once more
+    
+		jz .exit                    ; no: once more
+    loop .get_fractional
+
+.exit:
     mov byte [edi], 0           ; Null-termination for ASCIIZ
 
     ; clean up FPU
@@ -340,6 +360,38 @@ fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: targe
     leave
     ret                         ; return: EDI points to the null-termination of the string
 
+_itoa:
+    enter 0, 0
+
+		cmp word [ebp+8], 0         ; check sign 
+    jge .init
+	  
+    mov byte [edi], '-'
+		add edi, 1
+		neg word [ebp+8]            ; make input positive
+
+.init:
+    mov ax, [ebp+8]
+    mov bx, 10
+		
+.loop:
+    xor dx, dx
+    div bx
+    add dl, 48                  ; '0'
+    push dx
+    test ax, ax
+    jnz .loop
+
+.stack:
+    pop ax	
+    stosb                        
+    cmp esp, ebp                ; check stack is empty
+    jne .stack
+
+.exit:
+    leave
+    ret
+
 ; --- printf(double) -> void
 ; --- print st0 to stdin
 _printf:
@@ -360,23 +412,34 @@ _printf:
 .common_form:
     ffree st0
     fld F_BUFFER
-    call _print_st0
+    call _dtoa
+    mov byte [edi], 10
+		add edi, 1
+		call _print_edi
     leave 
     ret
 
 .exp_form:
-    call _print_st0
-    leave 
-    ret
+		call _dtoa
+    mov byte [edi], 101           ; e
+    add edi, 1
+    call _print_edi
+		
+		mov edi, buffer
+		push I_BUFFER
+    call _itoa
+    mov byte [edi], 10
+		add edi, 1
+		call _print_edi
+		leave
+		ret
 
-_print_st0:
-   mov edi, buffer
-   call _dtoa
-   
-   mov ebx, 1
-   mov eax, 4
-   mov ecx, buffer
-   mov edx, edi
-   int 80h
-   ret
+_print_edi:
+    mov ebx, 1
+    mov eax, 4
+    mov ecx, buffer
+    mov edx, edi
+    sub edx, buffer
+		int 80h
+    ret
 
