@@ -11,7 +11,7 @@ section .data
     lenErr equ $ - msgErr
 
 section .bss
-    buffer resb BUFF_SIZE      ; buffer to read input
+    buffer resb BUFF_SIZE       ; buffer to read input
 
 section .text
 _start:
@@ -21,28 +21,28 @@ _start:
     mov eax, 4
     mov edx, lenX
     mov ecx, msgX
-    int 80h
+    int 80h                     ; prompt for x
 		
     mov ebx, 2
     mov eax, 3
     mov edx, BUFF_SIZE
     mov ecx, buffer
-    int 80h
+    int 80h                     ; buffer=input
 
     push buffer
-    call _atof
+    call _atof                  ; st0=real x
     add esp, 4
 
-    call _calc
+    call _calc                  ; st0=f(x)
     
     mov ebx, 1
     mov eax, 4
     mov ecx, msgRes
-    mov edx, lenRes
-    int 80h
+    mov edx, lenRes           
+    int 80h                     ; print message with res
 
-    mov edi, buffer
-    call _printf
+    mov edi, buffer             ; put buffer to write
+    call _printf                ; print st0
     
 _exit:
     mov ebx, 0
@@ -54,7 +54,7 @@ _error:
     mov eax, 4
     mov ecx, msgErr
     mov edx, lenErr
-    int 80h
+    int 80h                     ; print error message
     jmp _exit
 
 ;--- _pow10
@@ -139,7 +139,7 @@ _atof:
 .error:
     leave
     add esp, 8
-    jmp _error                  ; prompt for a new number
+    jmp _error                  ; print error message and exit 
 
 .done:
     cmp SIGN, 0                 ; check for sign
@@ -183,9 +183,9 @@ _calc:
     faddp st2                   ; st0=1+x
     fdivrp                      ; st0=x^2/(1+x)
     mov I_BUFFER, 54            
-		fiadd I_BUFFER              ; st0=54 + x^2/(1+x)
-		leave
-		ret
+    fiadd I_BUFFER              ; st0=54 + x^2/(1+x)
+    leave
+    ret
 
 .2: ; 75 * x^2 - 17 * x         x <= 1
     fld st0                     ; st0=st1=x
@@ -197,7 +197,7 @@ _calc:
     fimul I_BUFFER              ; st1=17*x
     fsub                        ; st0=st1-st0
     leave
-		ret                         ; done
+    ret                         ; done
 
 .3: ; 85 * x / (1 + x)          x > 20
     fld st0                     ; st0 = st1 = x
@@ -207,7 +207,7 @@ _calc:
     faddp st2                   ; st0=85x, st1=1+x
     fdivrp                      ; st0=st0/st1
     leave
-		ret 
+    ret 
 
 ;--- _normalize
 ;--- normalize value in st0
@@ -222,8 +222,8 @@ _normalize:
     enter 24, 0
     
     fild SIGN
-		fcomip st1                  ; compare with zero
-		je .exit
+    fcomip st1                  ; compare with zero
+    je .exit
 		
     ; fexp = floor(log_10(fvar))
     fld st0
@@ -328,7 +328,7 @@ fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: targe
     fbstp [ebp-10]
 
     mov ecx, 10                 ; loop counter
-    lea esi, [ebp - 1]          ; bcd + 9 (last byte)
+    lea esi, [ebp-1]          ; bcd + 9 (last byte)
     xor bl, bl                  ; checker for leading zeros
 
     ; handle sign
