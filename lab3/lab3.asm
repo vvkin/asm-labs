@@ -179,12 +179,12 @@ _calc:
 .1: ; 54+x^2/(1+x)              1 < x <= 20
     fld st0                     ; st0 = st1 = x
     fmul st0                    ; st0=x^2
-    mov I_BUFFER, 54
-    fiadd I_BUFFER              ; st0=54+x^2
-    fld1                        ; st0=1, st1=54+x^2, st2=x
+    fld1                        ; st0=1, st1=x^2, st2=x
     faddp st2                   ; st0=1+x
-    fdivrp                      ; done
-    leave
+    fdivrp                      ; st0=x^2/(1+x)
+    mov I_BUFFER, 54            
+		fiadd I_BUFFER              ; st0=54 + x^2/(1+x)
+		leave
 		ret
 
 .2: ; 75 * x^2 - 17 * x         x <= 1
@@ -220,7 +220,11 @@ _normalize:
     %define F_BUFFER tword [ebp-24]
 
     enter 24, 0
-
+    
+    fild SIGN
+		fcomip st1                  ; compare with zero
+		je .exit
+		
     ; fexp = floor(log_10(fvar))
     fld st0
     fabs                        ; log doesn't support neg. values
