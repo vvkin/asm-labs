@@ -12,7 +12,7 @@ section .data
 
 section .bss
     buffer  resb BUFF_SIZE      ; buffer to read inpuy
-    fbuffer resq 1              ; buffer to store double values
+    fbuffer rest 1              ; buffer to store double values
     ibuffer resd 1              ; buffer to store dword
 
 section .text
@@ -86,9 +86,9 @@ _atof:
     %define SIGN  byte [ebp-2]
     %define TEN   word [ebp-4] 
     %define I_BUFFER dword [ebp-8]
-    %define F_BUFFER qword [ebp-16]
+    %define F_BUFFER tword [ebp-18]
 
-    enter 16, 0
+    enter 18, 0
 
     fldz                        ; push 0 to st0
     xor eax, eax                ; number of digits after dot
@@ -154,7 +154,7 @@ _atof:
     fild dword I_BUFFER         ; push eax to fstack
 
     call _pow10                 ; st0 = 10 ^ eax
-    fld qword F_BUFFER
+    fld F_BUFFER
     fdivrp
 
 .exit:
@@ -212,9 +212,9 @@ _normalize:
     %define OLD_CW word [ebp-4]
     %define NEW_CW word [ebp-6]
     %define F_EXP  qword [ebp-14]
-    %define F_BUFFER qword [ebp-22]
+    %define F_BUFFER tword [ebp-24]
 
-    enter 22, 0
+    enter 24, 0
 
     ; fexp = floor(log_10(fvar))
     fld st0
