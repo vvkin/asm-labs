@@ -272,7 +272,7 @@ _dtoa:
     fst
     frndint                     ; st0 to integer
     fsub st1, st0               ; integral part in st0, fractional part in st1
-    call fpu2bcd2dec
+    call _fpu2bcd2dec
     fabs                        ; make fractional positive (not guaranteed by fsub)
 
     mov byte [edi], '.'         ; decimal point
@@ -290,12 +290,12 @@ _dtoa:
     fist word TEMP              ; store digit
     fisub word TEMP             ; clear integer part
     mov al, byte TEMP           ; load digit
-    or al, 0x30                 ; convert digit to ASCII
+    or al, 0x30                 ; convert digit to ASCII, decimal 24
     mov byte [edi], al          ; append it to string
     add edi, 1                  ; increment pointer to string
     fxam                        ; st0 == 0.0?
-    fstsw ax
-    sahf
+    fstsw ax                    ; put status word to ax
+    sahf                        ; place ax to registers
     
     jz .exit                    ; no: once more
     loop .get_fractional
@@ -304,26 +304,23 @@ _dtoa:
     mov byte [edi], 0           ; Null-termination for ASCIIZ
 
     ; clean up FPU
-    ffree st0                   ; empty ST(0)
-    ffree st1                   ; empty ST(1)
+    ffree st0                   ; empty st0
+    ffree st1                   ; empty st1
     fldcw CONTROL_WORD          ; restore old rounding mode
 
     leave
     ret                         ; return: edi points to the null-termination of the string
 
-fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: target string
-    push ebp
-    mov ebp, esp
-    sub esp, 10                 ; 10 bytes for local tbyte variable
-
-    fbstp [ebp-10]
+_fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: target string
+    enter 10, 0                 ; 10 bytes for local variable
+    fbstp [ebp-10]               
 
     mov ecx, 10                 ; loop counter
-    lea esi, [ebp-1]          ; bcd + 9 (last byte)
+    lea esi, [ebp-1]            ; bcd + 9 (last byte)
     xor bl, bl                  ; checker for leading zeros
 
     ; handle sign
-    btr word [ebp-2], 15        ; move sign bit into carry flag and clear it
+    btr word [ebp-2], 15        ; move sign bit into carry flag and nullify it
     jnc .L1                     ; negative?
     mov byte [edi], '-'         ; yes: store a minus character
     add edi, 1
@@ -339,10 +336,10 @@ fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: targe
     add edi, 1
     
 .1:
-    and al, 0Fh                 ; isolate right nibble
+    and al, 0Fh                 ; isolate right nibble, decimal 15
     or bl, al                   ; check for leading zero
     jz .2
-    or al, 30h                  ; convert digit to ASCII
+    or al, 30h                  ; convert digit to ASCII, decimal 48
     mov [edi], al
     add edi, 1
     
@@ -352,13 +349,13 @@ fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: targe
 
     test bl, bl                 ; bl remains 0 if all digits were 0
     jnz .R1                     ; skip next line if integral part > 0
-    mov byte [edi], '0'
+    mov byte [edi], '0'         ; zero if there are no digits before dot
     add edi, 1
 
 .R1:
     mov byte [edi], 0           ; null-termination for ASCIIZ
     leave
-    ret                         ; return: EDI points to the null-termination of the string
+    ret                         ; return: edi points to the null-termination of the string
 
 _itoa:
     enter 0, 0
