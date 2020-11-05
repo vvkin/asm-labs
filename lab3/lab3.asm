@@ -22,7 +22,7 @@ _start:
     mov edx, lenX
     mov ecx, msgX
     int 80h                     ; prompt for x
-		
+
     mov ebx, 2
     mov eax, 3
     mov edx, BUFF_SIZE
@@ -88,9 +88,9 @@ _atof:
     fldz                        ; push 0 to st0
     xor eax, eax                ; number of digits after dot
     xor ebx, ebx        
-    xor edx, edx                ; sign
+    xor edx, edx                 
     mov ecx, [ebp+8]            ; pointer to first char in input
-	  
+  
     mov TEN, 10
     mov SIGN, 0
 
@@ -100,7 +100,7 @@ _atof:
     je .done
     cmp bl, 10                  ; \n
     je .done
-		
+
     cmp bl, 46                  ; check for dot
     je .dot
     cmp bl, 45                  ; check for minus
@@ -118,10 +118,10 @@ _atof:
     fiadd word DIGIT
     jmp .new_iteration
 
-.dot:                           ; if dot then nullify counter
+.dot:                           
     test edx, edx               ; check is it second dot
     jnz .error
-    mov edx, 1
+    mov edx, 1                  ; first dot occured
     jmp .new_iteration
 
 .check_sign:
@@ -218,7 +218,7 @@ _normalize:
     fild SIGN
     fcomip st1                  ; compare with zero
     je .exit
-		
+
     ; fexp = floor(log_10(fvar))
     fld st0
     fabs                        ; log doesn't support neg. values
@@ -237,7 +237,7 @@ _normalize:
     fldcw NEW_CW                ; change rounding mode
     frndint                     ; truncate log_10(input)
     fldcw OLD_CW                ; restore rounding mode
-		fst F_EXP                   ; store fexp value, st0=fexp, st1=fvar
+    fst F_EXP                   ; store fexp value, st0=fexp, st1=fvar
 
     ; fsig = fvar / 10^(fexp)
     call _pow10                 ; st0=10^fexp, st1=fvar
@@ -261,7 +261,7 @@ _dtoa:
     %define TEMP         word [ebp-6]
     
     enter 6, 0
-		
+
     fstcw CONTROL_WORD
     mov ax, CONTROL_WORD
     or ah, 00001100b            ; set RC=11: truncating rounding mode
@@ -279,7 +279,7 @@ _dtoa:
     add edi, 1
     mov ecx, 18                 ; less than 18 digits after the dot
 
-    ; push 10 to st1	
+    ; push 10 to st1
     mov TEN, 10
     fild TEN
     fxch
@@ -290,7 +290,7 @@ _dtoa:
     fist word TEMP              ; store digit
     fisub word TEMP             ; clear integer part
     mov al, byte TEMP           ; load digit
-    or al, 0x30                 ; convert digit to ASCII, decimal 24
+    or al, 0x30                 ; convert digit to ASCII, decimal 48
     mov byte [edi], al          ; append it to string
     add edi, 1                  ; increment pointer to string
     fxam                        ; st0 == 0.0?
@@ -301,7 +301,7 @@ _dtoa:
     loop .get_fractional
 
 .exit:
-    mov byte [edi], 0           ; Null-termination for ASCIIZ
+    mov byte [edi], 0           ; null-termination for ASCIIZ
 
     ; clean up FPU
     ffree st0                   ; empty st0
@@ -311,7 +311,7 @@ _dtoa:
     leave
     ret                         ; return: edi points to the null-termination of the string
 
-_fpu2bcd2dec:                    ; args: st0: FPU-register to convert, edi: target string
+_fpu2bcd2dec:                   ; args: st0: FPU-register to convert, edi: target string
     enter 10, 0                 ; 10 bytes for local variable
     fbstp [ebp-10]               
 
@@ -362,7 +362,7 @@ _itoa:
 
     cmp word [ebp+8], 0         ; check sign 
     jge .init
-	  
+  
     mov byte [edi], '-'
     add edi, 1
     neg word [ebp+8]            ; make input positive
@@ -370,7 +370,7 @@ _itoa:
 .init:
     mov ax, [ebp+8]
     mov bx, 10
-		
+
 .loop:
     xor dx, dx
     div bx
@@ -380,7 +380,7 @@ _itoa:
     jnz .loop
 
 .stack:
-    pop ax	
+    pop ax
     stosb                        
     cmp esp, ebp                ; check stack is empty
     jne .stack
@@ -398,7 +398,7 @@ _printf:
     enter 10, 0
 
     fst F_BUFFER
-    call _normalize              ; st1=significant, st0=fexp
+    call _normalize             ; st1=significant, st0=fexp
    
     fistp I_BUFFER
     cmp I_BUFFER, 18
@@ -410,7 +410,7 @@ _printf:
     ffree st0
     fld F_BUFFER
     call _dtoa
-    mov byte [edi], 10            ; \n
+    mov byte [edi], 10          ; \n
     add edi, 1
     call _print_edi
     leave 
@@ -418,14 +418,15 @@ _printf:
 
 .exp_form:
     call _dtoa
-    mov byte [edi], 101           ; e
+    mov byte [edi], 101         ; e
     add edi, 1
     call _print_edi
-		
+
     mov edi, buffer
     push I_BUFFER
     call _itoa
-    mov byte [edi], 10             ; \n
+    add esp, 4
+    mov byte [edi], 10          ; \n
     add edi, 1
     call _print_edi
     leave
