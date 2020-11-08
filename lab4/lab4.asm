@@ -1,5 +1,7 @@
+%define UPPER_BOUND 100
+
 section .data
-    prompt  db 'Select one of the following:', 10
+		prompt  db 'Select one of the following:', 10
 		lenPrompt equ $ - prompt
 		option1 db '1 - find sum of elements in array', 10
 		len1 equ $ - option1
@@ -17,13 +19,14 @@ section .data
 		lenError equ $ - errorMsg
 		rulesMsg db 'Element must be an integer in range [-32768, 32767]!', 10
 		lenRules equ $ - rulesMsg
-		elementMsg db 'Enter element '
+		elementMsg db 'array['
 		lenElement equ $ - elementMsg
-		colonws    db ': '
-		lenColonws equ $ - colonws
+		braceEqual    db '] = '
+		lenBraceEqual equ $ - braceEqual
 
 section .bss
-		arr     resw 100            ; buffer for one dimensional array
+		arr     resd UPPER_BOUND    ; buffer for one dimensional array
+		arrSize resd 1              ; size of one dimensional array
 		buffer  resb 7
 		err     resb 1              ; global variable to handle errors
 
@@ -190,6 +193,20 @@ _print_num:
 ;--- read number from stdin, convert
 ;--- it to int16 and put to ax
 _get_element:
+.print:
+		push ecx                    ; save registers 
+		push esi
+
+		mov ecx, elementMsg         ; prompt for number
+		mov edx, lenElement
+		call _sys_write
+		call _print_num             ; now top of stack = eax
+		
+		mov ecx, braceEqual
+		mov edx, lenBraceEqual    
+		call _sys_write             ; ] = 
+		
+.read:
 		mov ecx, buffer
 		mov edx, 7
 		call _sys_read              ; input in buffer
@@ -205,20 +222,15 @@ _get_element:
 		mov ecx, rulesMsg
 		mov edx, lenRules
 		call _sys_write
-		jmp _get_element
+		jmp .read
 
 .exit:
+		pop esi
+		pop ecx
 		ret
 
-;--- read array size and
-;--- array elements from stdin
-;--- stack: pointer to read array
-_make_array:
-		mov ecx, sizeMsg
-		mov edx, lenSize
-		call _sys_write
-
-.read_size:
+;--- just read from stdin to eax number from [1, UPPER_BOUND]
+_read_size:
 		mov ecx, buffer
 		mov edx, 4                  ; no more than 4 symbols (with \n)
 		call _sys_read
@@ -229,45 +241,33 @@ _make_array:
 		add esp, 4
 
 		cmp byte [err], 1
-		je .read_size               ; an erorr occured
+		je _read_size               ; an erorr occured
 
-		cmp ax, 100
-		jg .read_size               ; size < 100
-		cmp ax, 1                
-		jl .read_size               ; size > 0
+		cmp eax, UPPER_BOUND
+		jg _read_size               ; size < 100
+		cmp eax, 1                
+		jl _read_size               ; size > 0
+		ret
+		
+;--- read array size and
+;--- array elements from stdin
+_make_array:
+		mov ecx, sizeMsg
+		mov edx, lenSize
+		call _sys_write
+		call _read_size             ; eax = array size
 
 .init:
-		enter 0, 0
-		mov ebx, [ebp+8]            ; pointer to array
+		xor esi, esi                ; offset / 4
 		mov ecx, eax                ; array size
-		xor eax, eax                ; element number counter
+		mov dword [arrSize], eax
 
-.loop:
-		push ecx                    ; save registers 
-		push ebx
-		push eax
-		
-		mov ecx, elementMsg         ; prompt for number
-		mov edx, lenElement
-		call _sys_write
-		call _print_num             ; now top of stack = eax
-		
-		mov ecx, colonws
-		mov edx, lenColonws
-		call _sys_write
-		
-		call _get_element           ; eax = elemen
-		
-		pop eax
-		pop ebx                     
-		pop ecx
-
-		mov [ebx], eax
-		add ebx, 4
-		inc eax
-		loop .loop
+.fill:
+		call _get_element           ; eax = element
+		mov [arr+esi*4], eax
+		inc esi
+		loop .fill         
 
 .exit:
-		leave
 		ret
 
