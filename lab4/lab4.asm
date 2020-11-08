@@ -1,4 +1,7 @@
+global _start
+
 %define UPPER_BOUND 100
+%define BIT32_LEN   13          ; len(-2**31) + 1
 
 section .data
 		prompt  db 'Select one of the following:', 10
@@ -17,24 +20,21 @@ section .data
 		lenSize equ $ - sizeMsg
 		errorMsg db 'Sorry, but something went wrong', 10
 		lenError equ $ - errorMsg
-		rulesMsg db 'Element must be an integer in range [-32768, 32767]!', 10
+		rulesMsg db 'Only 32bit signed integers are allowed!', 10
 		lenRules equ $ - rulesMsg
 		elementMsg db 'array['
 		lenElement equ $ - elementMsg
-		braceEqual    db '] = '
+		braceEqual db '] = '
 		lenBraceEqual equ $ - braceEqual
 
 section .bss
 		arr     resd UPPER_BOUND    ; buffer for one dimensional array
 		arrSize resd 1              ; size of one dimensional array
-		buffer  resb 7
+		buffer  resb BIT32_LEN
+		dummy   resb 1
 		err     resb 1              ; global variable to handle errors
 
 section .text
-
-global _start
-
-;--- entry point
 _start:
 		call _print_intro
 		;call _handle_choice
@@ -55,8 +55,8 @@ _error:
 		call _sys_write
 		jmp _start
 		
-;--- atoi(const char* str) -> int (ax)
-;--- ax - output
+;--- atoi(const char* str) -> int32 (eax)
+;--- eax - output
 ;--- bl - current char
 ;--- dl - sign
 _atoi:
@@ -82,9 +82,9 @@ _atoi:
 
 .valid_digit:
 		sub bl, 48                  ; get digit
-		imul ax, word 10
+		imul eax, dword 10
 		jo .error
-		add ax, bx
+		add eax, ebx
 		jo .error
 		jmp .new_iteration
 
@@ -104,7 +104,7 @@ _atoi:
 .done:
 		cmp dl, 0                   ; check for sign
 		je .exit
-		neg ax
+		neg eax
 		jo .error 
 
 .exit:
@@ -184,19 +184,19 @@ _print_num:
 
 .print:
 		mov ecx, buffer
-    mov edx, edi
-    sub edx, buffer
-    call _sys_write
-    leave
+		mov edx, edi
+		sub edx, buffer
+		call _sys_write
+		leave
 		ret
 
 ;--- read number from stdin, convert
 ;--- it to int16 and put to ax
 _get_element:
-.print:
 		push ecx                    ; save registers 
 		push esi
 
+.print:
 		mov ecx, elementMsg         ; prompt for number
 		mov edx, lenElement
 		call _sys_write
@@ -205,12 +205,28 @@ _get_element:
 		mov ecx, braceEqual
 		mov edx, lenBraceEqual    
 		call _sys_write             ; ] = 
+
 		
+		mov ecx, BIT32_LEN          ; buffer length
+.clear_buffer:
+		mov byte [buffer+ecx], 0    ; fill with \0
+		loop .clear_buffer
+	
 .read:
-		mov ecx, buffer
-		mov edx, 7
-		call _sys_read              ; input in buffer
-    
+		mov ebx, 2
+		mov ecx, buffer             ; input in buffer
+		mov edx, BIT32_LEN
+		              
+.flush_stdin:
+		mov eax, 3                  ; sys_read
+		int 80h                     ; call kernel
+		cmp byte [ecx+eax-1], 10    ; compare last char in stdin with \n
+		je .convert
+		mov edx, 1
+		mov ecx, dummy
+		jmp .flush_stdin
+
+.convert:
 		push buffer                 ; push str to convert
 		mov  byte [err], 0          ; nullify error variable
 		call _atoi
@@ -222,7 +238,7 @@ _get_element:
 		mov ecx, rulesMsg
 		mov edx, lenRules
 		call _sys_write
-		jmp .read
+		jmp .print
 
 .exit:
 		pop esi
