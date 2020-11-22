@@ -3,35 +3,18 @@ global _start
 %define UPPER_BOUND 100
 %define BIT32_LEN   13          ; len(-2**31) + 1
 
-section .data
-		prompt  db 'Select one of the following:', 10
-		lenPrompt equ $ - prompt
-		option1 db '1 - find sum of elements in array', 10
-		len1 equ $ - option1
-		option2 db '2 - find maximal element in array', 10
-		len2 equ $ - option2
-		option3 db '3 - sort array', 10
-		len3 equ $ - option3
-		option4 db '4 - find element in matrix', 10
-		len4 equ $ - option4
-		choiceMsg db 'Type your choice: '
-		lenChoice equ $ - choiceMsg
-		sizeMsg db 'Enter array size (less than 100): ', 0
-		lenSize equ $ - sizeMsg
-		errorMsg db 'Sorry, but something went wrong', 10
-		lenError equ $ - errorMsg
-		rulesMsg db 'Only 32bit signed integers are allowed!', 10
-		lenRules equ $ - rulesMsg
-		elementMsg db 'array['
-		lenElement equ $ - elementMsg
-		braceEqual db '] = '
-		lenBraceEqual equ $ - braceEqual
-		sumResult db 'Sum of elements of array: '
-		lenSum equ $ - sumResult
-		maxResult db 'Maximal element of array: '
-		lenMax equ $ - maxResult
-		sortResult db 'Sorted array:', 10
-		lenSort equ $ - sortResult
+%macro print_str 1+
+		jmp %%output
+
+%%string: db %1
+%%output:
+		mov ebx, 1
+		mov eax, 4
+		mov ecx, %%string
+		mov edx, %%output-%%string
+		int 80h
+		
+%endmacro
 
 section .bss
 		arr     resd UPPER_BOUND    ; buffer for one dimensional array
@@ -45,29 +28,12 @@ _start:
 
 ;--- print messages to stdin
 _print_intro:
-		mov ecx, prompt
-		mov edx, lenPrompt
-		call _sys_write
-
-		mov ecx, option1
-		mov edx, len1
-		call _sys_write
-
-		mov ecx, option2
-		mov edx, len2
-		call _sys_write
-
-		mov ecx, option3
-		mov edx, len3
-		call _sys_write
-
-		mov ecx, option4
-		mov edx, len4
-		call _sys_write
-
-		mov ecx, choiceMsg
-		mov edx, lenChoice
-		call _sys_write
+		print_str 'Choose one of the following:', 0xA, 0x0
+		print_str '1 - find sum of elements of array', 0xA, 0x0
+		print_str '2 - find maximal element in array', 0xA, 0x0
+		print_str '3 - sort array', 0xA, 0x0
+		print_str '4 - find element in matrix', 0xA, 0x0
+		print_str 'Type your choice: ',  0x0
 
 ;--- read answer option from stdin
 _handle_input:
@@ -95,20 +61,24 @@ _handle_input:
 		je .sum
 		cmp eax, 2
 		je .max
+		cmp eax, 3
+		je .sort
 
+		jmp _print_intro
+
+.sort:
+		print_str 'Sorted array:', 0xA, 0x0
+		call _sort_array
+		call _print_array
 		jmp _exit
 
 .sum:
-		mov ecx, sumResult
-		mov edx, lenSum
-		call _sys_write
+		print_str 'Sum of elements of array: ', 0x0
 		call _find_sum
 		jmp .print_eax
 
 .max:
-		mov ecx, maxResult
-		mov edx, lenMax
-		call _sys_write
+		print_str 'Maximal element of array: ', 0x0
 		call _find_max
 
 .print_eax:
@@ -116,31 +86,20 @@ _handle_input:
 		call _print_num
 		add esp, 8
 		
-		mov byte [buffer], 10       ; \n
-		mov ecx, buffer
-		mov edx, 1
-		call _sys_write
+		print_str 0xA
 		jmp _exit
 		
 .matrix:
 		jmp _exit
 		
 .error:
-		call _print_intro
-		call _handle_input
+		jmp _print_intro
 
 ;--- end program execution
 _exit:
 		mov ebx, 0
 		mov eax, 1
 		int 80h
-
-;--- print error message and jmp to _start
-_error:
-		mov ecx, errorMsg
-		mov edx, lenError
-		call _sys_write
-		jmp _start
 
 ;--- atoi(const char* str) -> int32 (eax)
 ;--- eax - output
@@ -256,16 +215,10 @@ _get_element:
 		push esi
 
 .print:
-		mov ecx, elementMsg         ; prompt for number
-		mov edx, lenElement
-		call _sys_write
+		print_str 'array[', 0x0
 		call _print_num             ; now top of stack = eax
-		
-		mov ecx, braceEqual
-		mov edx, lenBraceEqual    
-		call _sys_write             ; ] = 
+		print_str '] = ', 0x0
 
-		
 		mov ecx, BIT32_LEN          ; buffer length
 .clear_buffer:
 		mov byte [buffer+ecx], 0    ; fill with \0
@@ -294,9 +247,7 @@ _get_element:
 		cmp byte [err], 1
 		jne .exit
 
-		mov ecx, rulesMsg
-		mov edx, lenRules
-		call _sys_write
+		print_str 'Only 32bit signed integers are allowed!', 0xA, 0x0
 		jmp .print
 
 .exit:
@@ -306,6 +257,7 @@ _get_element:
 
 ;--- just read from stdin to eax number from [1, UPPER_BOUND]
 _read_size:
+.begin:
 		mov ecx, buffer
 		mov edx, 4                  ; no more than 4 symbols (with \n)
 		call _sys_read
@@ -316,20 +268,21 @@ _read_size:
 		add esp, 4
 
 		cmp byte [err], 1
-		je _read_size               ; an erorr occured
-
+		je .error               ; an erorr occured
 		cmp eax, UPPER_BOUND
-		jg _read_size               ; size < 100
+		jg .error               ; size < 100
 		cmp eax, 1                
-		jl _read_size               ; size > 0
+		jl .error               ; size > 0
 		ret
+
+.error:
+		print_str 'Try again: ',  0x0
+		jmp .begin
 		
 ;--- read array size and
 ;--- array elements from stdin
 _make_array:
-		mov ecx, sizeMsg
-		mov edx, lenSize
-		call _sys_write
+		print_str 'Enter array size (integer from [0, 1000]): ', 0x0
 		call _read_size             ; eax = array size
 
 .init:
@@ -376,10 +329,46 @@ _find_max:
 		ret
 
 ; sort array (by reference)
-;_sort_array:
+_sort_array:
+		mov ecx, dword [arrSize]    ; initialize outer loop
+		dec ecx
 
-		
-;.outer:
-;.inner:
-		
+.outer:
+		mov edx, ecx                ; initialize inner loop
+		xor esi, esi
 
+.inner:
+		mov eax, [arr+esi*4]
+		cmp eax, [arr+esi*4+4]      ; arr[j] > arr[j+1]
+		jl .no_swap
+		xchg eax, [arr+esi*4+4]     ; swap
+		mov [arr+esi*4], eax
+
+.no_swap:
+		inc esi
+		dec edx
+		jnz .inner
+
+		loop .outer                 ; while (--ecx)
+
+.exit:
+		ret
+
+; print array to stdin
+_print_array:
+		xor esi, esi
+		print_str '[ ', 0x0
+
+.loop:
+		push dword [arr+esi*4]	
+		call _print_num
+		add esp, 4
+		print_str 0x20
+		
+		inc esi
+		cmp esi, [arrSize]
+		jl .loop
+
+.exit:
+		print_str ']', 0xA, 0x0
+		ret
