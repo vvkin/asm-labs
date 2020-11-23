@@ -69,6 +69,7 @@ _handle_input:
 
 .matrix:
 		call _make_matrix
+		call _find_in_matrix
 		jmp _exit
 
 .sort:
@@ -435,3 +436,64 @@ _make_matrix:
 		print_str 'An error occured. Try again!', 0xA, 0x0
 		jmp .inner
 
+
+_find_in_matrix:
+%define number [ebp-4]
+
+enter 4,0
+
+.read_number:
+		print_str 'Type number to find (32bit signed integer): ', 0x0
+		call _read_32bit            ; eax = int(input)
+		cmp byte [err], 1
+		je .read_number
+		mov number, eax             ; save to local variable
+
+.init:
+		print_str 'Suitable indices:', 0xA, 0x0
+		xor ebx, ebx
+
+.outer:
+		xor esi, esi
+
+.inner:
+		mov eax, [rowSize]
+		imul ebx
+		add eax, esi
+
+		mov eax, [matrix+eax*4]
+		cmp eax, number
+		je .print
+
+.next:
+		inc esi
+		cmp esi, [colSize]
+		jl .inner
+
+		inc ebx
+		cmp ebx, [rowSize]
+		jl .outer
+
+.exit:
+		leave
+		ret
+
+.print:
+		push esi
+		push ebx
+
+		call _print_num
+		print_str 0x20
+		
+		mov eax, [esp]
+		xchg eax, [esp+4]
+		mov [esp], eax
+
+		call _print_num
+		print_str 0xA
+
+		pop esi
+		pop ebx
+
+		jmp .next
+		
