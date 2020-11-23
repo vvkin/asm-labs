@@ -68,7 +68,7 @@ _handle_input:
 		jmp _print_intro
 
 .matrix:
-		;call _make_matrix
+		call _make_matrix
 		jmp _exit
 
 .sort:
@@ -376,4 +376,62 @@ _print_array:
 .exit:
 		print_str ']', 0xA, 0x0
 		ret
+
+_make_matrix:
+.read_sizes:
+		print_str 'Enter number of rows: ', 0x0
+		call _read_size
+		mov [rowSize], eax
+
+		print_str 'Enter number of columns: ', 0x0
+		call _read_size
+		mov [colSize], eax
+
+.init:
+		xor ebx, ebx                ; i
+
+.outer:
+		xor esi, esi                ; j
+
+.inner:
+		push esi
+		push ebx
+
+		print_str 'matrix[', 0x0
+		call _print_num             ; TOS = ebx
+		print_str '][', 0x0 
+		
+		mov eax, [esp]
+		xchg eax, [esp+4]
+		mov [esp], eax              ; swap values in stack
+		
+		call _print_num             ; TOS = esi 
+		print_str '] = '            ; matrix[i][j] = 
+				
+		call _read_32bit            ; eax = int(input)
+		pop esi
+		pop ebx
+
+		cmp byte [err], 1           ; check for error
+		je .error
+		
+		mov edx, [rowSize]
+		imul edx, ebx
+		add edx, esi
+		mov [matrix+edx*4], eax     ; matrix[i][j] = num
+
+		inc esi
+		cmp esi, [colSize]
+		jl .inner
+		
+		inc ebx
+		cmp ebx, [rowSize]
+		jl .outer
+
+.exit:
+		ret
+
+.error:
+		print_str 'An error occured. Try again!', 0xA, 0x0
+		jmp .inner
 
