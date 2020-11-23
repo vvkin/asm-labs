@@ -65,8 +65,6 @@ _handle_input:
 		cmp eax, 3
 		je .sort
 
-		jmp _print_intro
-
 .matrix:
 		call _make_matrix
 		call _find_in_matrix
@@ -81,7 +79,10 @@ _handle_input:
 .sum:
 		print_str 'Sum of elements of array: ', 0x0
 		call _find_sum
-		jmp .print_eax
+		
+		cmp byte [err], 1           ; check for error
+		jne .print_eax              ; all is OK
+		jmp _exit                   ; overflow occured
 
 .max:
 		print_str 'Maximal element of array: ', 0x0
@@ -90,7 +91,7 @@ _handle_input:
 .print_eax:
 		push eax
 		call _print_num
-		add esp, 8
+		add esp, 4
 		
 		print_str 0xA
 		jmp _exit
@@ -215,7 +216,9 @@ _print_num:
 		ret
 
 _read_32bit:
+		mov byte [err], 0           ; nullify error
 		mov ecx, BIT32_LEN          ; buffer length
+
 .clear_buffer:
 		mov byte [buffer+ecx], 0    ; fill with \0
 		loop .clear_buffer
@@ -230,6 +233,7 @@ _read_32bit:
 		int 80h                     ; call kernel
 		cmp byte [ecx+eax-1], 10    ; compare last char in stdin with \n
 		je .convert
+		
 		mov edx, 1
 		mov ecx, dummy
 		jmp .flush_stdin
@@ -237,8 +241,8 @@ _read_32bit:
 .convert:
 		push buffer                 ; push str to convert
 		mov  byte [err], 0          ; nullify error variable
-		call _atoi
-		add esp, 4                  ; err = {0, 1}
+		call _atoi                  ; if an error occured,
+		add esp, 4                  ; err = 1, else err = 0
 
 .exit:
 		ret
@@ -259,6 +263,7 @@ _read_size:
 		print_str 'Try again:', 0x20, 0x0
 		jmp _read_size
 
+; create array from stdin input
 _make_array:
 		print_str 'Enter array size (integer from [0, 1000]): ', 0x0
 		call _read_size             ; eax = array size
@@ -271,7 +276,7 @@ _make_array:
 		xor esi, esi
 
 .fill:
-		push ecx
+		push ecx                    ; save registers
 		push esi
 
 		print_str 'array['
@@ -283,8 +288,8 @@ _make_array:
 
 		cmp byte [err], 1           ; check for error
 		je .error
-		pop ecx                     ; restore ecx
-		
+		pop ecx
+
 		mov [arr+esi*4], eax        ; arr[i] = number
 		inc esi
 		loop .fill         
@@ -299,14 +304,21 @@ _make_array:
 
 ;--- place sum of array to eax
 _find_sum:
+		mov byte [err], 0             ; nullify error
 		xor eax, eax
 		xor esi, esi
 		mov ecx, [arrSize]
 
 .loop:
 		add eax, [arr+esi*4]
+		jo .overflow                  ; check for overflow
 		inc esi
 		loop .loop
+		ret
+
+.overflow:
+		print_str 0xA, 'An overflow error occured!', 0xA, 0x0
+		mov byte [err], 1             ; an error occured
 		ret
 
 ; place maximal element of array to eax
@@ -363,7 +375,7 @@ _print_array:
 		xor esi, esi
 
 .loop:
-		push ecx
+		push ecx                   ; save ecx
 		push dword [arr+esi*4]	
 		call _print_num
 		add esp, 4
@@ -378,7 +390,9 @@ _print_array:
 		print_str ']', 0xA, 0x0
 		ret
 
+; create matrix from stdin input
 _make_matrix:
+
 .read_sizes:
 		print_str 'Enter number of rows: ', 0x0
 		call _read_size
@@ -438,7 +452,7 @@ _make_matrix:
 
 
 _find_in_matrix:
-%define number [ebp-4]
+%define toFind [ebp-4]
 
 enter 4,0
 
@@ -447,7 +461,7 @@ enter 4,0
 		call _read_32bit            ; eax = int(input)
 		cmp byte [err], 1
 		je .read_number
-		mov number, eax             ; save to local variable
+		mov toFind, eax             ; save to local variable
 
 .init:
 		print_str 'Suitable indices:', 0xA, 0x0
@@ -462,7 +476,7 @@ enter 4,0
 		add eax, esi
 
 		mov eax, [matrix+eax*4]
-		cmp eax, number
+		cmp eax, toFind
 		je .print
 
 .next:
