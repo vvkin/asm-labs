@@ -254,7 +254,7 @@ _read_size:
 		cmp byte [err], 1       ; not a number
 		je .error
 		cmp eax, UPPER_BOUND
-		jg .error               ; size < 1000
+		jg .error               ; size <= UPPER_BOUND
 		cmp eax, 1                
 		jl .error               ; size > 0
 		ret
@@ -265,7 +265,7 @@ _read_size:
 
 ; create array from stdin input
 _make_array:
-		print_str 'Enter array size (integer from [0, 256]): ', 0x0
+		print_str 'Enter array size (integer from [1, 256]): ', 0x0
 		call _read_size             ; eax = array size
 
 .init:
@@ -394,11 +394,11 @@ _print_array:
 _make_matrix:
 
 .read_sizes:
-		print_str 'Enter number of rows (integer from [0, 256]): ', 0x0
+		print_str 'Enter number of rows (integer from [1, 256]): ', 0x0
 		call _read_size
 		mov [rowSize], eax
 
-		print_str 'Enter number of columns (integer from [0, 256): ', 0x0
+		print_str 'Enter number of columns (integer from [1, 256]): ', 0x0
 		call _read_size
 		mov [colSize], eax
 
@@ -425,11 +425,11 @@ _make_matrix:
 				
 		call _read_32bit            ; eax = int(input)
 		pop esi
-		pop ebx
 
 		cmp byte [err], 1           ; check for error
 		je .error
-		
+		pop ebx
+
 		mov edx, [rowSize]
 		imul edx, ebx
 		add edx, esi
@@ -448,6 +448,7 @@ _make_matrix:
 
 .error:
 		print_str 'An error occured. Try again!', 0xA, 0x0
+		pop ebx
 		jmp .inner
 
 
