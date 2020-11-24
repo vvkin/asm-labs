@@ -1,6 +1,6 @@
 global _start
 
-%define UPPER_BOUND 1000
+%define UPPER_BOUND 256
 %define BIT32_LEN   13          ; len(-2**31) + 1
 
 %macro print_str 1+
@@ -265,7 +265,7 @@ _read_size:
 
 ; create array from stdin input
 _make_array:
-		print_str 'Enter array size (integer from [0, 1000]): ', 0x0
+		print_str 'Enter array size (integer from [0, 256]): ', 0x0
 		call _read_size             ; eax = array size
 
 .init:
@@ -394,11 +394,11 @@ _print_array:
 _make_matrix:
 
 .read_sizes:
-		print_str 'Enter number of rows: ', 0x0
+		print_str 'Enter number of rows (integer from [0, 256]): ', 0x0
 		call _read_size
 		mov [rowSize], eax
 
-		print_str 'Enter number of columns: ', 0x0
+		print_str 'Enter number of columns (integer from [0, 256): ', 0x0
 		call _read_size
 		mov [colSize], eax
 
