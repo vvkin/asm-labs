@@ -32,6 +32,47 @@ global _start
     fstp st1                    ; st0=10^n
 %endmacro
 
+%macro itoa 1
+		xor ecx, ecx
+		mov bx, %1
+		cmp bx, 0         ; check sign 
+		jge %%init
+  
+		mov byte [edi], '-'
+		inc edi
+		inc cx
+		neg bx            ; make input positive
+
+%%init:
+		mov ax, bx
+		mov bx, 10
+
+%%loop:
+		inc ecx
+		xor dx, dx
+		div bx
+		add dl, 48                  ; '0'
+		push dx
+		test ax, ax
+		jnz %%loop
+
+%%stack:
+		pop ax
+		stosb
+		loop %%stack
+
+%endmacro
+
+%macro print_edi 0
+		mov ebx, 1
+		mov eax, 4
+		mov ecx, buffer
+		mov edx, edi
+		sub edx, buffer
+		int 80h
+%endmacro
+
+
 section .bss
     buffer resb BUFF_SIZE       ; buffer to read input
 
@@ -349,38 +390,6 @@ _fpu2bcd2dec:                   ; args: st0: FPU-register to convert, edi: targe
     leave
     ret                         ; return: edi points to the null-termination of the string
 
-_itoa:
-    enter 0, 0
-
-    cmp word [ebp+8], 0         ; check sign 
-    jge .init
-  
-    mov byte [edi], '-'
-    add edi, 1
-    neg word [ebp+8]            ; make input positive
-
-.init:
-    mov ax, [ebp+8]
-    mov bx, 10
-
-.loop:
-    xor dx, dx
-    div bx
-    add dl, 48                  ; '0'
-    push dx
-    test ax, ax
-    jnz .loop
-
-.stack:
-    pop ax
-    stosb                        
-    cmp esp, ebp                ; check stack is empty
-    jne .stack
-
-.exit:
-    leave
-    ret
-
 ;--- printf(double) -> void
 ;--- print st0 to stdin
 _printf:
@@ -402,34 +411,24 @@ _printf:
     ffree st0
     fld F_BUFFER
     call _dtoa
-    mov byte [edi], 10          ; \n
-    add edi, 1
-    call _print_edi
+		print_edi
+    
+		print_str 0xA, 0x0          ; \n
     leave 
     ret
 
 .exp_form:
     call _dtoa
-    mov byte [edi], 101         ; e
-    add edi, 1
-    call _print_edi
+		mov byte [edi], 'e'
+		inc edi
+		print_edi
 
-    mov edi, buffer
-    push I_BUFFER
-    call _itoa
-    add esp, 4
-    mov byte [edi], 10          ; \n
-    add edi, 1
-    call _print_edi
+    mov edi, buffer              ; pointer to string
+    mov bx, I_BUFFER
+		itoa bx                      ; print exp
+		print_edi
+		print_str 0xA, 0x0           ; \n
+
     leave
-    ret
-
-_print_edi:
-    mov ebx, 1
-    mov eax, 4
-    mov ecx, buffer
-    mov edx, edi
-    sub edx, buffer
-    int 80h
     ret
 
