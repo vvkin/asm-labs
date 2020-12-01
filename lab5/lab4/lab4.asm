@@ -199,6 +199,202 @@ global _start
 
 %endmacro
 
+%macro read_32bit 0
+		mov byte [err], 0           ; nullify error
+		clear_buffer
+%%read:
+		mov ebx, 2
+		mov ecx, buffer             ; input in buffer
+		mov edx, BIT32_LEN
+		              
+%%flush_stdin:
+		mov eax, 3                  ; sys_read
+		int 80h                     ; call kernel
+		cmp byte [ecx+eax-1], 10    ; compare last char in stdin with \n
+		je %%convert
+		
+		mov edx, 1
+		mov ecx, dummy
+		jmp %%flush_stdin
+
+%%convert:
+		mov  byte [err], 0          ; nullify error variable
+		atoi buffer                 
+
+%endmacro
+
+;--- just read from stdin to eax number from [1, UPPER_BOUND]
+%macro read_size 0
+%%1:		
+		read_32bit
+		
+		cmp byte [err], 1       ; not a number
+		je %%error
+		cmp eax, UPPER_BOUND
+		jg %%error               ; size <= UPPER_BOUND
+		cmp eax, 1                
+		jl %%error               ; size > 0
+		jmp %%exit
+
+%%error:
+		print_str 'Try again:', 0x20, 0x0
+		jmp %%1
+
+%%exit:
+%endmacro
+
+; create array from stdin input
+%macro make_array 0
+		print_str 'Enter array size (integer from [1, 256]): ', 0x0
+		read_size             ; eax = array size
+
+%%init:
+		mov [arrSize], eax
+		print_str 'Please, fill array with 32bit signed integers: ', 0xA, 0x0
+		
+		mov ecx, [arrSize]          ; initialize counter
+		xor esi, esi
+
+%%fill:
+		push ecx                    ; save registers
+		push esi
+
+		print_str 'array['
+		print_num esi               ; print idx (esi)
+		print_str '] = '
+		
+		read_32bit                  ; eax = number
+		pop esi                     ; restore esi
+
+		cmp byte [err], 1           ; check for error
+		je %%error
+		pop ecx
+
+		mov [arr+esi*4], eax        ; arr[i] = number
+		inc esi
+		
+		dec ecx
+		jnz %%fill         
+		jmp %%end
+
+%%error:
+		print_str 'An error occured. Try again!', 0xA, 0x0
+		pop ecx
+		jmp %%fill
+
+%%end:
+%endmacro
+
+%macro make_matrix 0
+
+%%read_sizes:
+		print_str 'Enter number of rows (integer from [1, 256]): ', 0x0
+		read_size
+		mov [rowSize], eax
+
+		print_str 'Enter number of columns (integer from [1, 256]): ', 0x0
+		read_size
+		mov [colSize], eax
+
+%%init:
+		xor ebx, ebx                ; i
+
+%%outer:
+		xor esi, esi                ; j
+
+%%inner:
+		push esi
+		push ebx
+
+		print_str 'matrix[', 0x0
+		print_num [esp]             ; ebx
+		print_str '][', 0x0 
+		
+		print_num [esp+4]           ; esi 
+		print_str '] = '            ; matrix[i][j] = 
+				
+		read_32bit            ; eax = int(input)
+		cmp byte [err], 1           ; check for error
+		je %%error
+
+		pop ebx
+		pop esi
+
+		mov edx, [rowSize]
+		imul edx, ebx
+		add edx, esi
+		mov [matrix+edx*4], eax     ; matrix[i][j] = num
+
+		inc esi
+		cmp esi, [colSize]
+		jl %%inner
+		
+		inc ebx
+		cmp ebx, [rowSize]
+		jl %%outer
+		jmp %%exit
+
+%%error:
+		print_str 'An error occured. Try again!', 0xA, 0x0
+		pop ebx
+		pop esi
+		jmp %%inner
+
+%%exit:
+%endmacro
+
+%macro find_in_matrix 0
+%%read_number:
+		print_str 'Type number to find (32bit signed integer): ', 0x0
+		read_32bit            ; eax = int(input)
+		cmp byte [err], 1
+		je %%read_number
+		mov [toFind], eax             ; save to local variable
+
+%%init:
+		print_str 'Suitable indices:', 0xA, 0x0
+		xor ebx, ebx
+
+%%outer:
+		xor esi, esi
+
+%%inner:
+		mov eax, [rowSize]
+		imul ebx
+		add eax, esi
+
+		mov eax, [matrix+eax*4]
+		cmp eax, [toFind]
+		je %%print
+
+%%next:
+		inc esi
+		cmp esi, [colSize]
+		jl %%inner
+
+		inc ebx
+		cmp ebx, [rowSize]
+		jl %%outer
+		jmp %%exit
+
+%%print:
+		push esi
+		push ebx
+
+		print_num [esp]             ; ebx
+		print_str 0x20
+		
+		print_num [esp+4]           ; esi     
+		print_str 0xA
+
+		pop ebx
+		pop esi
+
+		jmp %%next
+
+%%exit:
+%endmacro
+
 section .bss
 		arr     resd UPPER_BOUND    ; buffer for one dimensional array
 		arrSize resd 1              ; size of one dimensional array
@@ -226,7 +422,7 @@ _print_intro:
 
 ;--- read answer option from stdin
 _handle_input:
-		call _read_32bit
+		read_32bit
 		cmp byte [err], 1
 		je .error
 		
@@ -239,7 +435,7 @@ _handle_input:
 
 .array:
 		push eax                   ; save eax
-		call _make_array
+		make_array
 		pop eax                    ; restore eax
 		
 		cmp eax, 1
@@ -250,8 +446,8 @@ _handle_input:
 		je .sort
 
 .matrix:
-		call _make_matrix
-		call _find_in_matrix
+		make_matrix
+		find_in_matrix
 		jmp _exit
 
 .sort:
@@ -286,196 +482,4 @@ _exit:
 		mov ebx, 0
 		mov eax, 1
 		int 80h
-
-_read_32bit:
-		mov byte [err], 0           ; nullify error
-		clear_buffer
-.read:
-		mov ebx, 2
-		mov ecx, buffer             ; input in buffer
-		mov edx, BIT32_LEN
-		              
-.flush_stdin:
-		mov eax, 3                  ; sys_read
-		int 80h                     ; call kernel
-		cmp byte [ecx+eax-1], 10    ; compare last char in stdin with \n
-		je .convert
-		
-		mov edx, 1
-		mov ecx, dummy
-		jmp .flush_stdin
-
-.convert:
-		mov  byte [err], 0          ; nullify error variable
-		atoi buffer                 
-
-.exit:
-		ret
-
-;--- just read from stdin to eax number from [1, UPPER_BOUND]
-_read_size:
-		call _read_32bit
-		
-		cmp byte [err], 1       ; not a number
-		je .error
-		cmp eax, UPPER_BOUND
-		jg .error               ; size <= UPPER_BOUND
-		cmp eax, 1                
-		jl .error               ; size > 0
-		ret
-
-.error:
-		print_str 'Try again:', 0x20, 0x0
-		jmp _read_size
-
-; create array from stdin input
-_make_array:
-		print_str 'Enter array size (integer from [1, 256]): ', 0x0
-		call _read_size             ; eax = array size
-
-.init:
-		mov [arrSize], eax
-		print_str 'Please, fill array with 32bit signed integers: ', 0xA, 0x0
-		
-		mov ecx, [arrSize]          ; initialize counter
-		xor esi, esi
-
-.fill:
-		push ecx                    ; save registers
-		push esi
-
-		print_str 'array['
-		print_num esi               ; print idx (esi)
-		print_str '] = '
-		
-		call _read_32bit            ; eax = number
-		pop esi                     ; restore esi
-
-		cmp byte [err], 1           ; check for error
-		je .error
-		pop ecx
-
-		mov [arr+esi*4], eax        ; arr[i] = number
-		inc esi
-		
-		dec ecx
-		jnz .fill         
-
-.exit:
-		ret
-
-.error:
-		print_str 'An error occured. Try again!', 0xA, 0x0
-		pop ecx
-		jmp .fill
-
-; create matrix from stdin input
-_make_matrix:
-
-.read_sizes:
-		print_str 'Enter number of rows (integer from [1, 256]): ', 0x0
-		call _read_size
-		mov [rowSize], eax
-
-		print_str 'Enter number of columns (integer from [1, 256]): ', 0x0
-		call _read_size
-		mov [colSize], eax
-
-.init:
-		xor ebx, ebx                ; i
-
-.outer:
-		xor esi, esi                ; j
-
-.inner:
-		push esi
-		push ebx
-
-		print_str 'matrix[', 0x0
-		print_num [esp]             ; ebx
-		print_str '][', 0x0 
-		
-		print_num [esp+4]           ; esi 
-		print_str '] = '            ; matrix[i][j] = 
-				
-		call _read_32bit            ; eax = int(input)
-		cmp byte [err], 1           ; check for error
-		je .error
-
-		pop ebx
-		pop esi
-
-		mov edx, [rowSize]
-		imul edx, ebx
-		add edx, esi
-		mov [matrix+edx*4], eax     ; matrix[i][j] = num
-
-		inc esi
-		cmp esi, [colSize]
-		jl .inner
-		
-		inc ebx
-		cmp ebx, [rowSize]
-		jl .outer
-
-.exit:
-		ret
-
-.error:
-		print_str 'An error occured. Try again!', 0xA, 0x0
-		pop ebx
-		pop esi
-		jmp .inner
-
-
-_find_in_matrix:
-.read_number:
-		print_str 'Type number to find (32bit signed integer): ', 0x0
-		call _read_32bit            ; eax = int(input)
-		cmp byte [err], 1
-		je .read_number
-		mov [toFind], eax             ; save to local variable
-
-.init:
-		print_str 'Suitable indices:', 0xA, 0x0
-		xor ebx, ebx
-
-.outer:
-		xor esi, esi
-
-.inner:
-		mov eax, [rowSize]
-		imul ebx
-		add eax, esi
-
-		mov eax, [matrix+eax*4]
-		cmp eax, [toFind]
-		je .print
-
-.next:
-		inc esi
-		cmp esi, [colSize]
-		jl .inner
-
-		inc ebx
-		cmp ebx, [rowSize]
-		jl .outer
-
-.exit:
-		ret
-
-.print:
-		push esi
-		push ebx
-
-		print_num [esp]             ; ebx
-		print_str 0x20
-		
-		print_num [esp+4]           ; esi     
-		print_str 0xA
-
-		pop ebx
-		pop esi
-
-		jmp .next
 
