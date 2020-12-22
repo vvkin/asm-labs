@@ -43,7 +43,8 @@ _main:
 
 		sub ax, 88                  ; operation (var. 11)
 		jo _start                   ; met overflow
-
+		
+		mov edi, buffer
 		push ax
 		call _print_num
 		add esp, 2
@@ -112,46 +113,42 @@ _atoi:
 
 ;-- print_num(int) -> void
 ;-- print 16bit integer to stdin
-_print_num:
+_print_num:	
 		enter 0, 0
+		
 		cmp word [ebp+8], 0         ; check sign 
 		jge .init
-		
-		push ecx                    ; save ecx
-		mov byte [buffer], 45
-		mov ebx, 1
-		mov eax, 4
-		mov ecx, buffer             ; print '-' to stdout
-		mov edx, 1 
-		int 80h
-		pop ecx
-
+  
+		mov byte [edi], '-'
+		inc edi
 		neg word [ebp+8]            ; make input positive
 
 .init:
 		mov ax, [ebp+8]
 		mov bx, 10
-		
+
 .loop:
 		xor dx, dx
 		div bx
-		add dl, 48 ; '0'
+		add dl, 48                  ; '0'
 		push dx
 		test ax, ax
 		jnz .loop
-		mov edi, ecx                ; result will be in ecx 
 
 .stack:
-		pop ax	
+		pop ax
 		stosb                        
 		cmp esp, ebp                ; check stack is empty
 		jne .stack
 
 .print:
+		mov ecx, buffer
+		mov edx, edi
+		sub edx, buffer
 		mov ebx, 1
 		mov eax, 4
-		mov edx, edi                ; result length
 		int 80h
+
+.exit: 
 		leave
 		ret
-
